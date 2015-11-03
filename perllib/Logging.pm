@@ -17,6 +17,7 @@ our $VERSION = '1.3';
 
 use strict; use warnings;
 use Exporter;
+use File::Basename;
 
 # Symbolic Perl names for each of the log levels.
 use constant NONE    => -1;
@@ -34,7 +35,9 @@ use constant DEBUG   => 4;
 # non-negative sizes).
 
 # the name of the logfile to write to
+my $logDir  = '.';
 my $logName = 'Logging.log';
+my $logPath = File::Spec->catfile($logDir, $logName);
 
 # default log level
 my $logVerbosity = DEFAULT;
@@ -52,17 +55,17 @@ my $logCount = 3;
 our @LogLevels = qw(ERROR WARNING DEFAULT INFO DEBUG);
 
 our @ISA       = q(Exporter);
-our @EXPORT_OK = qw(LogName LogVerbosity LogSize LogCount LogRollover Break Log
-
+our @EXPORT_OK = qw(LogName LogVerbosity LogSize LogCount LogRollover LogBreak Log
 	&ERROR &WARNING &DEFAULT &INFO &DEBUG);
 
 
 sub LogName (;$) {
 	my $n = shift;
 	if (defined $n) {
-		$logName = $n;
+		(undef, $logDir, $logName) = File::Spec->splitpath($n);
+		$logPath = File::Spec->catfile($logDir, $logName);
 	}
-	return $logName;
+	return $logPath;
 }
 
 sub LogVerbosity (;$) {
@@ -109,54 +112,60 @@ sub LogRollover () {
 	use File::Copy;
 	use Carp;
 
-	if (-f $logName and -s $logName >= LogSize()) {
+	if (-f $logPath and -s $logPath >= LogSize()) {
 
 		# File::Glob, by default, sorts the filenames it returns
-		my @from = grep { -f } <$logName $logName.[1-9]>;
+		my @from = grep { -f } <$logPath $logPath.[1-9]>;
 		return unless @from;
 
 		# If the 1st file we globbed is not equal to the base filename, then we may
 		# create a new file with the base filename and not clobber anything
-		return if $from[0] ne $logName;
+		return if $from[0] ne $logPath;
 
 		# If there is a gap in the files' numbering, we only need to shift
 		# files up to that point and may leave the rest alone
 		my $i = 1;
 		for (; $i < $logCount; ++$i) {
 			# if a file is out-of-sequence, set $i to the missing log #
-			last if not defined $from[$i] or $from[$i] !~ /$logName\.$i/;
+			last if not defined $from[$i] or $from[$i] !~ /$logPath\.$i/;
 		}
 
 		# unlink the highest-numbered log, if we need the room
-		if ($i == $logCount and -f "$logName.$i") {
-			unless (unlink "$logName.$i") {
-				carp "Unable to remove '$logName.$i': $!";
+		if ($i == $logCount and -f "$logPath.$i") {
+			unless (unlink "$logPath.$i") {
+				carp "Unable to remove '$logPath.$i': $!";
 			}
 		}
 
 		# starting from the top, increment each files' log index
 		for (; $i > 1; --$i) {
-			my $new = "$logName.$i";
-			my $old = sprintf '%s.%d', $logName, $i - 1;
+			my $new = "$logPath.$i";
+			my $old = sprintf '%s.%d', $logPath, $i - 1;
 			unless (move($old, $new)) {
 				carp "Unable to move '$old' to '$new': $!";
 			}
 		}
 
 		# finally, add .1 to the newest log file's name
-		unless (move($logName, "$logName.1")) {
-			carp "Unable to move '$logName' to '$logName.1': $!";
+		unless (move($logPath, "$logPath.1")) {
+			carp "Unable to move '$logPath' to '$logPath.1': $!";
 		}
 	}
 }
 
 
 # Print a break line to distinguish a new section of the log
-sub Break () {
-	LogRollover();
-	if (open my $logFH, '>>', $logName) {
-		print $logFH "\n\n--------------------------------------------------------------------------------\n";
-		close $logFH;
+sub LogBreak () {
+	Log("\n\n--------------------------------------------------------------------------------\n");
+}
+
+sub _makepath {
+	my $sofar = '';
+	foreach my $component (File::Spec->splitdir(shift)) {
+		$sofar .= "$component/";
+		next if -d $sofar;
+		mkdir $sofar
+			or die "Couldn't mkdir '$sofar': $!\n";
 	}
 }
 
@@ -177,11 +186,14 @@ sub Log ($@) {
 	use Scalar::Util qw(looks_like_number);
 	my $logLevel = looks_like_number $_[0] ? shift : DEFAULT;
 	my $formatted = $#_ > 0;
-	LogRollover();
+
+	# ensure all path components leading up to the filename exist
+	_makepath($logDir);
 
 	# write everything out to the log file, taking care that the file is
 	# always closed when we're done so that it gets flushed on all OSes
-	if (open my $logFH, '>>', $logName) {
+	LogRollover();
+	if (open my $logFH, '>>', $logPath) {
 		if ($formatted) {
 			printf $logFH "<%.3s %s> $_[0]", $LogLevels[$logLevel], scalar localtime, @_[1 .. $#_];
 		}

@@ -41,7 +41,7 @@ use Logging qw(Log LogSize LogCount LogVerbosity ERROR WARNING DEFAULT INFO DEBU
 LogVerbosity($ARGV[0]);
 
 # Change the name of the log file - rolled over logs will get names like squares.log.N
-Logging::LogName('squares.log');
+Logging::LogName('logs/squares.log');
 
 # How many bytes per log file
 LogSize(1 << 12);
@@ -65,7 +65,7 @@ for my $i (0 .. 256) {
 
 	# log multiples of 10 at DEFAULT level, and add a line break to the log
 	elsif (not $i % 10) {
-		Logging::Break();
+		Logging::LogBreak();
 		Log(sprintf "%d squared is %d\n", $i, $i ** 2); 
 	}
 
