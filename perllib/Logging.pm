@@ -26,6 +26,7 @@ use constant WARNING => 1;
 use constant DEFAULT => 2;
 use constant INFO    => 3;
 use constant DEBUG   => 4;
+use constant DIRECT  => 5;
 
 
 # Default settings
@@ -156,9 +157,12 @@ sub LogRollover () {
 
 # Print a break line to distinguish a new section of the log
 sub LogBreak () {
-	Log("\n\n--------------------------------------------------------------------------------\n");
+	Log(DIRECT,
+		sprintf "\n---------------------------[%s]---------------------------\n",
+			scalar localtime);
 }
 
+# Create all components of a directory path
 sub _makepath {
 	my $sofar = '';
 	foreach my $component (File::Spec->splitdir(shift)) {
@@ -194,7 +198,10 @@ sub Log ($@) {
 	# always closed when we're done so that it gets flushed on all OSes
 	LogRollover();
 	if (open my $logFH, '>>', $logPath) {
-		if ($formatted) {
+		if ($logLevel == DIRECT) {
+			print $logFH $_[0];
+		}
+		elsif ($formatted) {
 			printf $logFH "<%.3s %s> $_[0]", $LogLevels[$logLevel], scalar localtime, @_[1 .. $#_];
 		}
 		else {

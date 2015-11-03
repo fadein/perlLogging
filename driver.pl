@@ -41,7 +41,7 @@ use Logging qw(Log LogSize LogCount LogVerbosity ERROR WARNING DEFAULT INFO DEBU
 LogVerbosity($ARGV[0]);
 
 # Change the name of the log file - rolled over logs will get names like squares.log.N
-Logging::LogName('logs/squares.log');
+Logging::LogName('logs/test/numbers/squares.log');
 
 # How many bytes per log file
 LogSize(1 << 12);
